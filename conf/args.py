@@ -10,7 +10,7 @@ class Arguments:
     max_len:int = 192
     checkpoint_batch_size:int = 32
     print_freq:int = 100
-    pretrained_model_name:str = "bert-base-uncased"
+    pretrained_model_name:str = "BioBert"
     learning_rate:float = 2e-4
     hidden_dropout_prob:float =0.4
     hidden_size:int=768
