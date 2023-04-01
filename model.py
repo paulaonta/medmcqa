@@ -65,7 +65,8 @@ class MCQAModel(pl.LightningModule):
     loss = self.ce_loss(logits,labels)
     result = TrainResult(loss)
     result.log('train_loss', loss, on_epoch=True)
-    return result
+    self.log('train_loss', loss)
+    return loss #return result
   
   def test_step(self, batch, batch_idx):
     inputs,labels = batch
@@ -94,9 +95,26 @@ class MCQAModel(pl.LightningModule):
     return result
   
   def validation_step(self, batch, batch_idx):
+    props = torch.cuda.get_device_properties(self.args['device'])
+
+    # Print the total amount of memory available on GPU device 0
+    #print("Total memory on GPU device 0:", props.total_memory)
     inputs,labels = batch
+    #print("GPU memory usage after loop:", torch.cuda.memory_allocated(device=self.args['device']))
     for key in inputs:
-      inputs[key] = inputs[key].to(self.args["device"])
+      '''
+      num_elements = torch.numel(inputs[key])
+
+      # calculate the size of each element in bytes
+      element_size = inputs[key].element_size()
+
+      # calculate the total size of the tensor in bytes
+      total_size = num_elements * element_size
+
+      print(total_size)
+     '''
+      inputs[key] = inputs[key].to(self.args['device'])
+      #print("GPU memory usage before loop:", torch.cuda.memory_allocated(device=self.args['device']))
     logits = self(**inputs)
     loss = self.ce_loss(logits,labels)
     result = EvalResult(loss)
@@ -105,6 +123,7 @@ class MCQAModel(pl.LightningModule):
     result.log('labels',labels,on_epoch=True)
     self.log('val_loss', loss)
     return result
+
 
   def validation_epoch_end(self, outputs):
         avg_loss = outputs['val_loss'].mean()
@@ -136,7 +155,8 @@ class MCQAModel(pl.LightningModule):
           context,question,options,label = data_tuple
         else:
           question,options,label = data_tuple
-        question_option_pairs = [question+' '+option for option in options]
+        question_option_pairs = [question+' '+ option if type(option) != float and type(option) != np.float64 else question +" " for option in options]
+#        print(question_option_pairs)
         labels.append(label)
 
         if context:
@@ -157,6 +177,7 @@ class MCQAModel(pl.LightningModule):
       )
     train_dataloader = DataLoader(self.train_dataset,
                                 batch_size=self.batch_size,
+                                num_workers=8,
                                 sampler=train_sampler,
                                 collate_fn=model_collate_fn)
     return train_dataloader
@@ -170,6 +191,7 @@ class MCQAModel(pl.LightningModule):
       )
     val_dataloader = DataLoader(self.val_dataset,
                                 batch_size=self.batch_size,
+                                num_workers = 8,
                                 sampler=eval_sampler,
                                 collate_fn=model_collate_fn)
     return val_dataloader
@@ -183,6 +205,7 @@ class MCQAModel(pl.LightningModule):
       )
     test_dataloader = DataLoader(self.test_dataset,
                                 batch_size=self.batch_size,
+                                num_workers = 8,
                                 sampler=eval_sampler,
                                 collate_fn=model_collate_fn)
     return test_dataloader

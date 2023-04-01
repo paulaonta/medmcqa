@@ -19,7 +19,7 @@ class MCQADataset(Dataset):
       context = self.dataset.loc[idx,'exp']
       return_tuple+=(context,)
     question = self.dataset.loc[idx,'question']
-    options = self.dataset.loc[idx,['opa', 'opb', 'opc', 'opd', 'ope']].values
-    label = self.dataset.loc[idx,'cop'] - 1
+    options = self.dataset.loc[idx,['opa', 'opb', 'opc', 'opd']].values
+    label = self.dataset.loc[idx,'cop'] #-1
     return_tuple+=(question,options,label)
     return return_tuple

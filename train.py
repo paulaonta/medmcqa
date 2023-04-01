@@ -11,10 +11,11 @@ import pandas as pd
 from tqdm import tqdm
 from multiprocessing import Process
 import time,argparse
+import os
+os.environ["WANDB_START_METHOD"] = "thread"
 
-
-EXPERIMENT_DATASET_FOLDER = "/content/medmcqa_data/"
-WB_PROJECT = "MEDMCQA"
+EXPERIMENT_DATASET_FOLDER = "./"
+WB_PROJECT = "medmcqa"
 
 def train(gpu,
           args,
@@ -24,13 +25,15 @@ def train(gpu,
           version):
 
     pl.seed_everything(42)
-    
+    torch.cuda.init()
+    print(torch.cuda.is_available())
+    print(torch.cuda.device_count())
     EXPERIMENT_FOLDER = os.path.join(models_folder,experiment_name)
     os.makedirs(EXPERIMENT_FOLDER,exist_ok=True)
     experiment_string = experiment_name+'-{epoch:02d}-{val_loss:.2f}-{val_acc:.2f}'
 
-
     wb = WandbLogger(project=WB_PROJECT,name=experiment_name,version=version)
+   # wb = WandbLogger()
     csv_log = CSVLogger(models_folder, name=experiment_name, version=version)
 
     train_dataset = MCQADataset(args.train_csv,args.use_context)
@@ -56,12 +59,13 @@ def train(gpu,
                               test_dataset=test_dataset,
                               val_dataset=val_dataset)
 
-    trainer = Trainer(gpus=gpu,
-                    distributed_backend='ddp' if not isinstance(gpu,list) else None,
+    trainer = Trainer(#accelerator="cuda", gpus=[gpu],strategy="auto",
+                    gpus=gpu,
+                   distributed_backend='ddp' if not isinstance(gpu,list) else None,
                     logger=[wb,csv_log],
                     callbacks= [es_callback,cp_callback],
                     max_epochs=args.num_epochs)
-    
+
     trainer.fit(mcqaModel)
     print(f"Training completed")
 
@@ -78,12 +82,12 @@ def train(gpu,
 
     #Persist test dataset predictions
     test_df = pd.read_csv(args.test_csv)
-    test_df.loc[:,"predictions"] = [pred+1 for pred in run_inference(inference_model,mcqaModel.test_dataloader(),args)]
+    test_df.loc[:,"predictions"] = [pred for pred in run_inference(inference_model,mcqaModel.test_dataloader(),args)]
     test_df.to_csv(os.path.join(EXPERIMENT_FOLDER,"test_results.csv"),index=False)
     print(f"Test predictions written to {os.path.join(EXPERIMENT_FOLDER,'test_results.csv')}")
 
     val_df = pd.read_csv(args.dev_csv)
-    val_df.loc[:,"predictions"] = [pred+1 for pred in run_inference(inference_model,mcqaModel.val_dataloader(),args)]
+    val_df.loc[:,"predictions"] = [pred for pred in run_inference(inference_model,mcqaModel.val_dataloader(),args)]
     val_df.to_csv(os.path.join(EXPERIMENT_FOLDER,"dev_results.csv"),index=False)
     print(f"Val predictions written to {os.path.join(EXPERIMENT_FOLDER,'dev_results.csv')}")
 
@@ -111,7 +115,7 @@ if __name__ == "__main__":
     models = ["allenai/scibert_scivocab_uncased","bert-base-uncased"]
     parser = argparse.ArgumentParser()
     parser.add_argument("--model",default="bert-base-uncased",help="name of the model")
-    parser.add_argument("--dataset_folder_name", default="/content/medmcqa_data/",help="dataset folder")
+    parser.add_argument("--dataset_folder_name", default="content/medmcqa_data/",help="dataset folder")
     parser.add_argument("--use_context",default=False,action='store_true',help="mention this flag to use_context")
     cmd_args = parser.parse_args()
 
@@ -122,14 +126,13 @@ if __name__ == "__main__":
     #     exit()
     print(f"Training started for model - {model} variant - {exp_dataset_folder} use_context - {str(cmd_args.use_context)}")
 
-    args = Arguments(train_csv=os.path.join(exp_dataset_folder,"train.csv"),
-                    test_csv=os.path.join(exp_dataset_folder,"test.csv"),
-                    dev_csv=os.path.join(exp_dataset_folder,"dev.csv"),
+    args = Arguments(train_csv=os.path.join(exp_dataset_folder,"train_MEDMCQA_orig.csv"),
+                    test_csv=os.path.join(exp_dataset_folder,"test_4_ans_only.csv"),
+                    dev_csv=os.path.join(exp_dataset_folder,"val_MEDMCQA_orig.csv"),
                     pretrained_model_name=model,
                     use_context=cmd_args.use_context)
     
-    exp_name = f"{model}@@@{os.path.basename(exp_dataset_folder)}@@@use_context{str(cmd_args.use_context)}@@@seqlen{str(args.max_len)}".replace("/","_")
-
+    exp_name = f"4ANSONLY{model}@@@{os.path.basename(exp_dataset_folder)}@@@use_context{str(cmd_args.use_context)}@@@daata{str(args.train_csv)}@@@seqlen{str(args.max_len)}".replace("/","_")
 
     train(gpu=args.gpu,
         args=args,

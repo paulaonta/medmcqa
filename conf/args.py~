@@ -15,7 +15,7 @@ class Arguments:
     hidden_dropout_prob:float =0.4
     hidden_size:int=768#512#768
     num_epochs:int = 5
-    num_choices:int = 4
+    num_choices:int = 5
     device:str='cuda'
     gpu='0,1,2'
     use_context:bool=True
