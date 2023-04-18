@@ -6,6 +6,7 @@ from torch import nn
 import numpy as np
 import math
 import torch
+import random
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data import RandomSampler
 from torch.utils.data import DataLoader,RandomSampler
@@ -155,7 +156,21 @@ class MCQAModel(pl.LightningModule):
           context,question,options,label = data_tuple
         else:
           question,options,label = data_tuple
-        question_option_pairs = [question+' '+ option if type(option) != float and type(option) != np.float64 else question +" " for option in options]
+        max = float('-Inf')
+        for option in options:
+          if len(str(option)) > max:
+            max = len(str(option))
+            aux_opt = str(option)
+        if max > 1:
+          # Set the length of the substring you want to extract
+          substring_length = int(max/2)
+
+          # Generate a random starting index for the substring
+          aux_opt = aux_opt[0:0 + substring_length]
+        else:
+          aux_opt = " "
+          
+        question_option_pairs = [question+' '+ option if type(option) != float and type(option) != np.float64 else question + aux_opt for option in options]
 #        print(question_option_pairs)
         labels.append(label)
 

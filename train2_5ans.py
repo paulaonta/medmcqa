@@ -1,5 +1,5 @@
 from conf.args import Arguments
-from model import MCQAModel
+from model_5ans import MCQAModel
 from dataset import MCQADataset4, MCQADataset5
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.loggers import CSVLogger
@@ -12,6 +12,8 @@ from tqdm import tqdm
 from multiprocessing import Process
 import time,argparse
 import os
+import csv
+
 os.environ["WANDB_START_METHOD"] = "thread"
 
 EXPERIMENT_DATASET_FOLDER = "./"
@@ -25,8 +27,7 @@ def train(gpu,
           version):
     #experiment_name = "bert-base-uncased@@@@@@use_contextFalse@@@daata._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192"
     pretrained_model = "./4ANSONLY_MIR_bert-base-uncased@@@@@@use_contextFalse@@@data._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192/4ANSONLY_MIR_bert-base-uncased@@@@@@use_contextFalse@@@data._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192-epoch=02-val_loss=1.33-val_acc=0.34.ckpt"
-
-    pl.seed_everything(42)
+    pl.seed_everything(55)
     torch.cuda.init()
     print(torch.cuda.is_available())
     print(torch.cuda.device_count())
@@ -56,6 +57,7 @@ def train(gpu,
 
     mcqaModel = MCQAModel(model_name_or_path=args.pretrained_model_name,
                       args=args.__dict__)
+    mcqaModel = mcqaModel.load_from_checkpoint(pretrained_model)
     
     mcqaModel.prepare_dataset(train_dataset=train_dataset,
                               test_dataset=test_dataset,
@@ -66,9 +68,9 @@ def train(gpu,
                    distributed_backend='ddp' if not isinstance(gpu,list) else None,
                     logger=[wb,csv_log],
                     callbacks= [es_callback,cp_callback],
-                    resume_from_checkpoint=pretrained_model,
                     max_epochs=args.num_epochs)
-    
+    mcqaModel = mcqaModel.to("cuda")
+    mcqaModel = mcqaModel.train() 
     trainer.fit(mcqaModel)
     print(f"Training completed")
 
@@ -124,19 +126,28 @@ if __name__ == "__main__":
 
     exp_dataset_folder = os.path.join(EXPERIMENT_DATASET_FOLDER,cmd_args.dataset_folder_name)
     model = cmd_args.model
+    incorrect_csv = "./content/medmcqa_data/incorrect_ans.csv"
     # if((model == "allenai/scibert_scivocab_uncased" and os.path.basename(exp_dataset_folder) == "single_high_pubmed_exp") or 
     #    (model == "allenai/scibert_scivocab_uncased" and os.path.basename(exp_dataset_folder) == "multi_high_pubmed_exp")):
     #     exit()
     print(f"Training started for model - {model} variant - {exp_dataset_folder} use_context - {str(cmd_args.use_context)}")
 
-    args = Arguments(train_csv=os.path.join(exp_dataset_folder,"train_MEDMCQA_orig.csv"),
+    mycsv = csv.reader(open(incorrect_csv))
+    for line in mycsv:
+        number_incorrect = int(line[0])
+        print(number_incorrect)
+        break
+
+
+    args = Arguments(train_csv=os.path.join(exp_dataset_folder,"4_5_ans_train_MIR_rm.csv"),
                     test_csv=os.path.join(exp_dataset_folder,"4_5_ans_test_rm.csv"),
-                    dev_csv=os.path.join(exp_dataset_folder,"val_MEDMCQA_orig.csv"),
-                     incorrect_ans = 0,
+                    dev_csv=os.path.join(exp_dataset_folder,"4_5_ans_val_MIR_rm.csv"),
                     pretrained_model_name=model,
+                    incorrect_ans = number_incorrect,
                     use_context=cmd_args.use_context)
+
     
-    exp_name = f"4_5_ANS_(1.b)_ckpt_{model}@@@{os.path.basename(exp_dataset_folder)}@@@use_context{str(cmd_args.use_context)}@@@data{str(args.train_csv)}@@@seqlen{str(args.max_len)}".replace("/","_")
+    exp_name = f"4_5ANS_MIR_seed55(2a2)_{model}@@{os.path.basename(exp_dataset_folder)}@@use_context{str(cmd_args.use_context)}@@data{str(args.train_csv)}@@seqlen{str(args.max_len)}".replace("/","_")
 
     train(gpu=args.gpu,
         args=args,

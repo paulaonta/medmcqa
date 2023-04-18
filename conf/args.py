@@ -6,6 +6,7 @@ class Arguments:
     train_csv:str
     test_csv:str 
     dev_csv:str
+    incorrect_ans:int
     batch_size:int = 4
     max_len:int = 192
     checkpoint_batch_size:int = 32
@@ -17,5 +18,5 @@ class Arguments:
     num_epochs:int = 5
     num_choices:int = 4
     device:str='cuda'
-    gpu='0,1,2'
+    gpu='0,1'
     use_context:bool=True
