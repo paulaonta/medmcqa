@@ -16,7 +16,7 @@ import os
 os.environ["WANDB_START_METHOD"] = "thread"
 
 EXPERIMENT_DATASET_FOLDER = "./"
-WB_PROJECT = "medmcqa"
+WB_PROJECT = "medmcqa-context-OK"
 
 def train(gpu,
           args,
@@ -25,8 +25,8 @@ def train(gpu,
           models_folder,
           version):
     #experiment_name = "bert-base-uncased@@@@@@use_contextFalse@@@daata._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192"
-    pretrained_model = "./4ANSONLY_MIR_bert-base-uncased@@@@@@use_contextFalse@@@data._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192/4ANSONLY_MIR_bert-base-uncased@@@@@@use_contextFalse@@@data._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192-epoch=02-val_loss=1.33-val_acc=0.34.ckpt"
-    pl.seed_everything(42)
+    pretrained_model = "./1.proba_4ANS_ckpt_seed_42_bert-base-uncased@@@use_contextTrue@@@train_MEDMCQA_orig.csv@@@4_ans_only_test_MIR_rm_context.csv/1.proba_4ANS_ckpt_seed_42_bert-base-uncased@@@use_contextTrue@@@train_MEDMCQA_orig.csv@@@4_ans_only_test_MIR_rm_context.csv-epoch=04-val_loss=0.83-val_acc=0.62.ckpt"
+    pl.seed_everything(args.seed)
     torch.cuda.init()
     print(torch.cuda.is_available())
     print(torch.cuda.device_count())
@@ -115,29 +115,35 @@ def run_inference(model,dataloader,args):
 
 
 if __name__ == "__main__":
-
     models = ["allenai/scibert_scivocab_uncased","bert-base-uncased"]
     parser = argparse.ArgumentParser()
     parser.add_argument("--model",default="bert-base-uncased",help="name of the model")
+    parser.add_argument("--seed",default=42,help="seed for the experiments")
+    parser.add_argument("--train",default="train.csv",help="train dataset")
+    parser.add_argument("--val",default="val.csv",help="val dataset")
+    parser.add_argument("--test",default="test.csv",help="test dataset")
     parser.add_argument("--dataset_folder_name", default="content/medmcqa_data/",help="dataset folder")
     parser.add_argument("--use_context",default=False,action='store_true',help="mention this flag to use_context")
     cmd_args = parser.parse_args()
 
     exp_dataset_folder = os.path.join(EXPERIMENT_DATASET_FOLDER,cmd_args.dataset_folder_name)
     model = cmd_args.model
-    # if((model == "allenai/scibert_scivocab_uncased" and os.path.basename(exp_dataset_folder) == "single_high_pubmed_exp") or 
-    #    (model == "allenai/scibert_scivocab_uncased" and os.path.basename(exp_dataset_folder) == "multi_high_pubmed_exp")):
-    #     exit()
+    # if((model == "allenai/scibert_scivocab_uncased" and os.path.basename(exp_dataset_folder) == "single_high_pubmed_exp") or                                                                   
+    #    (model == "allenai/scibert_scivocab_uncased" and os.path.basename(exp_dataset_folder) == "multi_high_pubmed_exp")):                                                                     
+    #     exit()                                                                                                                                                                                 
     print(f"Training started for model - {model} variant - {exp_dataset_folder} use_context - {str(cmd_args.use_context)}")
 
-    args = Arguments(train_csv=os.path.join(exp_dataset_folder,"4_5_ans_train_MIR_rm.csv"),
-                    test_csv=os.path.join(exp_dataset_folder,"4_ans_only_test_MIR_rm.csv"),
-                    dev_csv=os.path.join(exp_dataset_folder,"4_5_ans_val_MIR_rm.csv"),
+    args = Arguments(train_csv=os.path.join(exp_dataset_folder,cmd_args.train),
+                     test_csv=os.path.join(exp_dataset_folder,cmd_args.test),
+                     dev_csv=os.path.join(exp_dataset_folder,cmd_args.val),
+                     incorrect_ans = 0,
+                     seed=cmd_args.seed,
                     pretrained_model_name=model,
-                    incorrect_ans = 0,
                     use_context=cmd_args.use_context)
-    
-    exp_name = f"4ANSMIR_seed55(2a2)_{model}@@@{os.path.basename(exp_dataset_folder)}@@@use_context{str(cmd_args.use_context)}@@data{str(args.train_csv)}@@@seqlen{str(args.max_len)}".replace("/","_")
+    if cmd_args.test == "4_ans_only_test_MIR_rm_context.csv":
+        exp_name = f"2.2OK_ckpt_4ANS_seed_{str(args.seed)}_{model}@@@use_context{str(cmd_args.use_context)}@@@{str(cmd_args.train)}@@@{str(cmd_args.test)}".replace("/","_")
+    else:
+        exp_name = f"2.2OK_ckpt_5to4ANS_seed_{str(args.seed)}_{model}@@@use_context{str(cmd_args.use_context)}@@@{str(cmd_args.train)}@@@{str(cmd_args.test)}".replace("/","_")
 
     train(gpu=args.gpu,
         args=args,

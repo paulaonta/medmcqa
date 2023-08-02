@@ -15,7 +15,7 @@ import os
 os.environ["WANDB_START_METHOD"] = "thread"
 
 EXPERIMENT_DATASET_FOLDER = "./"
-WB_PROJECT = "medmcqa"
+WB_PROJECT = "medmcqa-context-OK"
 
 def train(gpu,
           args,
@@ -24,9 +24,9 @@ def train(gpu,
           models_folder,
           version):
     #experiment_name = "bert-base-uncased@@@@@@use_contextFalse@@@daata._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192"
-    pretrained_model = "./4ANSONLY_MIR_bert-base-uncased@@@@@@use_contextFalse@@@data._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192/4ANSONLY_MIR_bert-base-uncased@@@@@@use_contextFalse@@@data._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192-epoch=02-val_loss=1.33-val_acc=0.34.ckpt"
+#    pretrained_model = "./4ANSONLY_MIR_bert-base-uncased@@@@@@use_contextFalse@@@data._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192/4ANSONLY_MIR_bert-base-uncased@@@@@@use_contextFalse@@@data._content_medmcqa_data_train_MEDMCQA_orig.csv@@@seqlen192-epoch=02-val_loss=1.33-val_acc=0.34.ckpt"
 
-    pl.seed_everything(42)
+    pl.seed_everything(args.seed)
     torch.cuda.init()
     print(torch.cuda.is_available())
     print(torch.cuda.device_count())
@@ -38,9 +38,9 @@ def train(gpu,
    # wb = WandbLogger()
     csv_log = CSVLogger(models_folder, name=experiment_name, version=version)
 
-    train_dataset = MCQADataset4(args.train_csv,args.use_context)
-    test_dataset = MCQADataset4(args.test_csv,args.use_context)
-    val_dataset = MCQADataset4(args.dev_csv,args.use_context)
+    train_dataset = MCQADataset5(args.train_csv,args.use_context)
+    test_dataset = MCQADataset5(args.test_csv,args.use_context)
+    val_dataset = MCQADataset5(args.dev_csv,args.use_context)
 
     es_callback = pl.callbacks.EarlyStopping(monitor='val_loss',
                                     min_delta=0.00,
@@ -66,14 +66,14 @@ def train(gpu,
                    distributed_backend='ddp' if not isinstance(gpu,list) else None,
                     logger=[wb,csv_log],
                     callbacks= [es_callback,cp_callback],
-                    resume_from_checkpoint=pretrained_model,
+ #                   resume_from_checkpoint=pretrained_model,
                     max_epochs=args.num_epochs)
     
     trainer.fit(mcqaModel)
     print(f"Training completed")
-
+    
     ckpt = [f for f in os.listdir(EXPERIMENT_FOLDER) if f.endswith('.ckpt')]
-
+    
     inference_model = MCQAModel.load_from_checkpoint(os.path.join(EXPERIMENT_FOLDER,ckpt[0]))
     inference_model = inference_model.to("cuda")
     inference_model = inference_model.eval()
@@ -118,6 +118,10 @@ if __name__ == "__main__":
     models = ["allenai/scibert_scivocab_uncased","bert-base-uncased"]
     parser = argparse.ArgumentParser()
     parser.add_argument("--model",default="bert-base-uncased",help="name of the model")
+    parser.add_argument("--seed",default=42,help="seed for the experiments")
+    parser.add_argument("--train",default="train.csv",help="train dataset")
+    parser.add_argument("--val",default="val.csv",help="val dataset")
+    parser.add_argument("--test",default="test.csv",help="test dataset")
     parser.add_argument("--dataset_folder_name", default="content/medmcqa_data/",help="dataset folder")
     parser.add_argument("--use_context",default=False,action='store_true',help="mention this flag to use_context")
     cmd_args = parser.parse_args()
@@ -129,20 +133,25 @@ if __name__ == "__main__":
     #     exit()
     print(f"Training started for model - {model} variant - {exp_dataset_folder} use_context - {str(cmd_args.use_context)}")
 
-    args = Arguments(train_csv=os.path.join(exp_dataset_folder,"train_MEDMCQA_orig.csv"),
-                    test_csv=os.path.join(exp_dataset_folder,"4_5_ans_test_rm.csv"),
-                    dev_csv=os.path.join(exp_dataset_folder,"val_MEDMCQA_orig.csv"),
+    args = Arguments(train_csv=os.path.join(exp_dataset_folder,cmd_args.train),
+                     test_csv=os.path.join(exp_dataset_folder,cmd_args.test),
+                     dev_csv=os.path.join(exp_dataset_folder,cmd_args.val),
                      incorrect_ans = 0,
+                     seed=cmd_args.seed,
                     pretrained_model_name=model,
                     use_context=cmd_args.use_context)
-    
-    exp_name = f"4_5_ANS_(1.b)_ckpt_{model}@@@{os.path.basename(exp_dataset_folder)}@@@use_context{str(cmd_args.use_context)}@@@data{str(args.train_csv)}@@@seqlen{str(args.max_len)}".replace("/","_")
+    if cmd_args.test == "4_ans_only_test_MIR_rm_context.csv":
+        exp_name = f"1.proba_ALL4ANS_bis_seed_{str(args.seed)}_{model}@@@use_context{str(cmd_args.use_context)}@@@{str(cmd_args.train)}@@@{str(cmd_args.test)}".replace("/","_")
+    else:
+        exp_name = f"31kasu_3.proba_cmp_seed_{str(args.seed)}_{model}@@@use_context{str(cmd_args.use_context)}@@@{str(cmd_args.train)}@@@{str(cmd_args.test)}".replace("/","_")
+
+
 
     train(gpu=args.gpu,
         args=args,
         exp_dataset_folder=exp_dataset_folder,
         experiment_name=exp_name,
-        models_folder="./models2",
+        models_folder="./models",
         version=exp_name)
     
     time.sleep(60)

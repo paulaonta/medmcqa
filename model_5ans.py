@@ -6,7 +6,6 @@ from torch import nn
 import numpy as np
 import math
 import torch
-import random
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data import RandomSampler
 from torch.utils.data import DataLoader,RandomSampler
@@ -88,7 +87,7 @@ class MCQAModel(pl.LightningModule):
     labels = outputs['labels']
     self.test_predictions = predictions
     correct_predictions = torch.sum(predictions==labels)
-    accuracy = correct_predictions.cpu().detach().numpy()/(predictions.size()[0])
+    accuracy = correct_predictions.cpu().detach().numpy()/(predictions.size()[0] + 6)#self.args['incorrect_ans'])
     result = EvalResult(checkpoint_on=avg_loss,early_stop_on=avg_loss)
     result.log_dict({"test_loss":avg_loss,"test_acc":accuracy},prog_bar=True,on_epoch=True)
     self.log('avg_test_loss', avg_loss)
@@ -97,25 +96,9 @@ class MCQAModel(pl.LightningModule):
   
   def validation_step(self, batch, batch_idx):
     props = torch.cuda.get_device_properties(self.args['device'])
-
-    # Print the total amount of memory available on GPU device 0
-    #print("Total memory on GPU device 0:", props.total_memory)
     inputs,labels = batch
-    #print("GPU memory usage after loop:", torch.cuda.memory_allocated(device=self.args['device']))
     for key in inputs:
-      '''
-      num_elements = torch.numel(inputs[key])
-
-      # calculate the size of each element in bytes
-      element_size = inputs[key].element_size()
-
-      # calculate the total size of the tensor in bytes
-      total_size = num_elements * element_size
-
-      print(total_size)
-     '''
       inputs[key] = inputs[key].to(self.args['device'])
-      #print("GPU memory usage before loop:", torch.cuda.memory_allocated(device=self.args['device']))
     logits = self(**inputs)
     loss = self.ce_loss(logits,labels)
     result = EvalResult(loss)
@@ -156,32 +139,15 @@ class MCQAModel(pl.LightningModule):
           context,question,options,label = data_tuple
         else:
           question,options,label = data_tuple
-        '''
-        max = float('-Inf')
-        for option in options:
-          if len(str(option)) > max:
-            max = len(str(option))
-            aux_opt = str(option)
-        if max > 1:
-          # Set the length of the substring you want to extract
-          substring_length = int(max/2)
-
-          # Generate a random starting index for the substring
-          aux_opt = aux_opt[0:0 + substring_length]
-        else:
-          aux_opt = " "
+        question_option_pairs = [question+' '+ option if type(option) != float and type(option) != np.float64 else question +" " for option in options]
         
-        '''
-        aux_opt = ' '
-        question_option_pairs = [question+' '+ option if type(option) != float and type(option) != np.float64 else question +aux_opt for option in options]
-#        print(question_option_pairs)
         labels.append(label)
+
         if context:
-          contexts = [str(context)]*len(options) #NaN to str
+          contexts = [context]*len(options)
           expanded_batch.extend(zip(contexts,question_option_pairs))
         else:
           expanded_batch.extend(question_option_pairs)
-
     tokenized_batch = tokenizer.batch_encode_plus(expanded_batch,truncation=True,padding="max_length",max_length=max_len,return_tensors="pt")
 
     return tokenized_batch,torch.tensor(labels)
